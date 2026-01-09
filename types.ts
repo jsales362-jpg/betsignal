@@ -54,7 +54,7 @@ export interface HistoricalMatchStats {
 
 export interface TeamHistory {
   overall: HistoricalMatchStats[];
-  specific: HistoricalMatchStats[]; // Home for home team, Away for away team
+  specific: HistoricalMatchStats[];
 }
 
 export interface PreMatchData {
@@ -75,6 +75,7 @@ export interface Match {
   minute: number;
   league: string;
   status: 'LIVE' | 'FINISHED' | 'SCHEDULED';
+  scheduledTime?: string;
   preMatch?: PreMatchData;
 }
 
@@ -85,7 +86,9 @@ export interface BettingSignal {
   confidence: number;
   oddSuggested: number;
   timestamp: string;
+  fullTimestamp: number; // Para ordenação e expiração
   analysis: string;
+  status: 'PENDING' | 'WIN' | 'LOSS';
   keyFactors?: string[];
   matchName?: string;
   leagueName?: string;
@@ -113,5 +116,8 @@ export enum ViewMode {
   SIGNALS = 'SIGNALS',
   LIVE_SIGNALS = 'LIVE_SIGNALS',
   DETAILS = 'DETAILS',
-  TICKETS = 'TICKETS'
+  TICKETS = 'TICKETS',
+  HISTORY = 'HISTORY',
+  STATS = 'STATS',
+  PRE_MATCH = 'PRE_MATCH'
 }

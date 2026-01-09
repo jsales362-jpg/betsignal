@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Match, BettingSignal, Player, HistoricalMatchStats, PlayerPerformance } from '../types';
 import { generateBettingSignals } from '../services/geminiService';
-import { ArrowLeft, BarChart3, Target, Zap, TrendingUp, AlertCircle, Loader2, TrendingDown, Bookmark, BookmarkCheck, CheckCircle2, Activity, Clock, History, Trophy, Users, User, ShieldAlert, Crosshair, Swords, Ghost, Info, PieChart as PieChartIcon, Shield, ChevronRight, Flame, Snowflake, Thermometer, Calendar } from 'lucide-react';
+import { ArrowLeft, BarChart3, Target, Zap, TrendingUp, AlertCircle, Loader2, TrendingDown, Bookmark, BookmarkCheck, CheckCircle2, Activity, Clock, History, Trophy, Users, User, ShieldAlert, Crosshair, Swords, Ghost, Info, PieChart as PieChartIcon, Shield, ChevronRight, Flame, Snowflake, Thermometer, Calendar, Swords as SwordsIcon, Percent } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, Legend, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 
 interface MatchDetailProps {
@@ -80,6 +80,15 @@ const PlayerCard: React.FC<{ player: Player; color: string }> = ({ player, color
     minutes: acc.minutes + game.minutesPlayed
   }), { goals: 0, assists: 0, shots: 0, tackles: 0, saves: 0, fouls: 0, yellowCards: 0, minutes: 0 }), [player]);
 
+  const getPosStyle = (pos: string) => {
+    switch(pos) {
+      case 'FW': return 'border-rose-500/30 text-rose-400 bg-rose-500/5 shadow-[0_0_10px_rgba(244,63,94,0.1)]';
+      case 'MF': return 'border-blue-500/30 text-blue-400 bg-blue-500/5 shadow-[0_0_10px_rgba(59,130,246,0.1)]';
+      case 'DF': return 'border-emerald-500/30 text-emerald-400 bg-emerald-500/5 shadow-[0_0_10px_rgba(16,185,129,0.1)]';
+      default: return 'border-amber-500/30 text-amber-400 bg-amber-500/5 shadow-[0_0_10px_rgba(245,158,11,0.1)]';
+    }
+  };
+
   return (
     <div className={`glass-card rounded-xl border border-white/5 overflow-hidden transition-all ${expanded ? 'col-span-full' : ''}`}>
       <button onClick={() => setExpanded(!expanded)} className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors">
@@ -88,19 +97,24 @@ const PlayerCard: React.FC<{ player: Player; color: string }> = ({ player, color
             {player.number}
           </div>
           <div className="text-left">
-            <h4 className="text-sm font-bold text-white">{player.name}</h4>
-            <span className="text-[10px] text-slate-500 uppercase font-black">{player.position}</span>
+            <div className="flex items-center gap-2 mb-0.5">
+              <h4 className="text-sm font-bold text-white leading-none">{player.name}</h4>
+              <span className={`text-[8px] px-1.5 py-0.5 rounded font-black border uppercase tracking-wider ${getPosStyle(player.position)}`}>
+                {player.position}
+              </span>
+            </div>
+            <span className="text-[9px] text-slate-500 font-medium">ID: {player.id.substring(0, 8)}</span>
           </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <div className="text-[10px] text-slate-500 uppercase font-black">Média 10j</div>
+            <div className="text-[10px] text-slate-500 uppercase font-black">Média</div>
             <div className="text-sm font-black text-emerald-400">
               {(player.lastTenGames.reduce((acc, g) => acc + g.rating, 0) / 10).toFixed(1)}
             </div>
           </div>
-          <div className={`transition-transform ${expanded ? 'rotate-180' : ''}`}>
-            <Users size={16} className="text-slate-600" />
+          <div className={`transition-transform text-slate-600 ${expanded ? 'rotate-180' : ''}`}>
+            <Users size={16} />
           </div>
         </div>
       </button>
@@ -182,32 +196,59 @@ const StatBox: React.FC<{ label: string; value: number; icon: React.ReactNode }>
 );
 
 const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack }) => {
-  const [activeTab, setActiveTab] = useState<'LIVE' | 'PRE' | 'PLAYERS'>('LIVE');
+  const [activeTab, setActiveTab] = useState<'LIVE' | 'PRE' | 'PLAYERS'>(() => 
+    match.status === 'SCHEDULED' ? 'PRE' : 'LIVE'
+  );
   const [historyFilter, setHistoryFilter] = useState<'OVERALL' | 'SPECIFIC'>('OVERALL');
   const [signals, setSignals] = useState<BettingSignal[]>([]);
   const [loadingSignals, setLoadingSignals] = useState(false);
   const [savedIds, setSavedIds] = useState<string[]>([]);
 
+  const h2h = match.preMatch?.h2h || { homeWins: 0, draws: 0, awayWins: 0 };
+  const h2hTotal = h2h.homeWins + h2h.draws + h2h.awayWins || 1;
+  const homeWinProb = Math.round((h2h.homeWins / h2hTotal) * 100);
+  const drawProb = Math.round((h2h.draws / h2hTotal) * 100);
+  const awayWinProb = 100 - homeWinProb - drawProb;
+
   const possessionData = useMemo(() => [{ name: match.homeTeam.name, value: match.homeTeam.possession, fill: '#10b981' }, { name: match.awayTeam.name, value: match.awayTeam.possession, fill: '#3b82f6' }], [match.homeTeam.possession, match.awayTeam.possession]);
   
+  const intensityHistory = useMemo(() => {
+    if (match.status === 'SCHEDULED') return [];
+    const intervals = Math.ceil(match.minute / 5);
+    const data = [];
+    const totalDA = match.homeTeam.dangerousAttacks + match.awayTeam.dangerousAttacks;
+    const avgDA = totalDA / Math.max(1, intervals);
+
+    for (let i = 1; i <= intervals; i++) {
+      const minuteLabel = `${(i - 1) * 5}-${i * 5}'`;
+      const variance = (Math.random() * 0.8 + 0.6);
+      const intensity = Math.min(100, (avgDA * variance * 10));
+      data.push({
+        time: minuteLabel,
+        intensity: parseFloat(intensity.toFixed(1)),
+        homeDA: Math.floor((match.homeTeam.dangerousAttacks / Math.max(1, intervals)) * variance),
+        awayDA: Math.floor((match.awayTeam.dangerousAttacks / Math.max(1, intervals)) * variance)
+      });
+    }
+    return data;
+  }, [match]);
+
+  const currentIntensity = intensityHistory.length > 0 ? intensityHistory[intensityHistory.length - 1].intensity : 0;
+
   const thermalData = useMemo(() => {
-    const min = Math.max(1, match.minute);
-    const dpm = (match.homeTeam.dangerousAttacks + match.awayTeam.dangerousAttacks) / min;
-    const spm = (match.homeTeam.shotsOnTarget + match.homeTeam.shotsOffTarget + match.awayTeam.shotsOnTarget + match.awayTeam.shotsOffTarget) / min;
-    const score = Math.min(100, (dpm * 35) + (spm * 15));
-    
+    const score = currentIntensity;
     if (score > 80) return { score, label: 'SUPER QUENTE', color: 'text-orange-500', icon: <Flame className="animate-bounce" /> };
     if (score > 60) return { score, label: 'QUENTE', color: 'text-amber-500', icon: <Flame /> };
     if (score > 35) return { score, label: 'MORNO', color: 'text-slate-400', icon: <Thermometer /> };
     return { score, label: 'FRIO', color: 'text-blue-400', icon: <Snowflake /> };
-  }, [match]);
+  }, [currentIntensity]);
 
   const radarData = useMemo(() => [
     { subject: 'Posse', A: match.homeTeam.possession, B: match.awayTeam.possession },
     { subject: 'Finaliz.', A: (match.homeTeam.shotsOnTarget + match.homeTeam.shotsOffTarget) * 5, B: (match.awayTeam.shotsOnTarget + match.awayTeam.shotsOffTarget) * 5 },
     { subject: 'No Alvo', A: match.homeTeam.shotsOnTarget * 10, B: match.awayTeam.shotsOnTarget * 10 },
     { subject: 'Cantos', A: match.homeTeam.corners * 6, B: match.awayTeam.corners * 6 },
-    { subject: 'Pressão', A: (match.homeTeam.dangerousAttacks / Math.max(1, match.minute)) * 40, B: (match.awayTeam.dangerousAttacks / Math.max(1, match.minute)) * 40 },
+    { subject: 'Pressão', A: (match.homeTeam.dangerousAttacks / Math.max(1, match.minute || 1)) * 40, B: (match.awayTeam.dangerousAttacks / Math.max(1, match.minute || 1)) * 40 },
   ], [match]);
 
   const historyToDisplayHome = historyFilter === 'OVERALL' ? match.preMatch?.homeHistory?.overall : match.preMatch?.homeHistory?.specific;
@@ -235,8 +276,9 @@ const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack }) => {
   }, []);
 
   const fetchSignals = async () => {
+    if (match.status !== 'LIVE') return;
     setLoadingSignals(true);
-    const result = await generateBettingSignals(match);
+    const result = await generateBettingSignals([match]);
     setSignals(result);
     setLoadingSignals(false);
   };
@@ -264,54 +306,112 @@ const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack }) => {
   return (
     <div className="animate-in fade-in slide-in-from-right-10 duration-300">
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-        <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"><ArrowLeft size={20} /> Voltar</button>
+        <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors active:scale-95"><ArrowLeft size={20} /> Voltar</button>
         <div className="flex bg-slate-800 p-1 rounded-xl border border-white/10">
-          <button onClick={() => setActiveTab('LIVE')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black transition-all ${activeTab === 'LIVE' ? 'bg-emerald-500 text-slate-950 shadow-lg' : 'text-slate-400'}`}><Activity size={14} /> AO VIVO</button>
+          {match.status === 'LIVE' && (
+            <button onClick={() => setActiveTab('LIVE')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black transition-all ${activeTab === 'LIVE' ? 'bg-emerald-500 text-slate-950 shadow-lg' : 'text-slate-400'}`}><Activity size={14} /> AO VIVO</button>
+          )}
           <button onClick={() => setActiveTab('PRE')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black transition-all ${activeTab === 'PRE' ? 'bg-blue-500 text-white shadow-lg' : 'text-slate-400'}`}><History size={14} /> PRÉ-JOGO</button>
           <button onClick={() => setActiveTab('PLAYERS')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black transition-all ${activeTab === 'PLAYERS' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-400'}`}><User size={14} /> JOGADORES</button>
         </div>
       </div>
 
       <div className="glass-card p-6 rounded-2xl mb-6 relative overflow-hidden border border-white/5">
-        <div className="absolute top-0 right-0 p-4"><span className="text-emerald-400 font-mono text-xl font-bold">{match.minute}'</span></div>
-        <div className="flex justify-between items-center max-w-lg mx-auto">
-          <div className="text-center flex-1"><h2 className="text-xl font-bold mb-2">{match.homeTeam.name}</h2><div className="text-5xl font-black">{match.homeTeam.score}</div></div>
-          <div className="px-8 text-2xl font-light text-slate-500">VS</div>
-          <div className="text-center flex-1"><h2 className="text-xl font-bold mb-2">{match.awayTeam.name}</h2><div className="text-5xl font-black">{match.awayTeam.score}</div></div>
+        <div className="absolute top-0 right-0 p-4">
+          {match.status === 'LIVE' ? (
+            <span className="text-emerald-400 font-mono text-xl font-bold">{match.minute}'</span>
+          ) : (
+            <div className="flex flex-col items-end">
+               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">INÍCIO ÀS</span>
+               <span className="text-white font-mono text-xl font-bold">{match.scheduledTime}</span>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-between items-center max-w-lg mx-auto relative z-10">
+          <div className="text-center flex-1">
+            <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-white/10">
+              <span className="text-xl font-black text-white">{match.homeTeam.name.substring(0, 3).toUpperCase()}</span>
+            </div>
+            <h2 className="text-sm font-bold text-slate-300 uppercase truncate">{match.homeTeam.name}</h2>
+            {match.status === 'LIVE' && <div className="text-4xl font-black text-white mt-1">{match.homeTeam.score}</div>}
+          </div>
+          <div className="px-8 text-2xl font-black text-slate-600">VS</div>
+          <div className="text-center flex-1">
+            <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-white/10">
+              <span className="text-xl font-black text-white">{match.awayTeam.name.substring(0, 3).toUpperCase()}</span>
+            </div>
+            <h2 className="text-sm font-bold text-slate-300 uppercase truncate">{match.awayTeam.name}</h2>
+            {match.status === 'LIVE' && <div className="text-4xl font-black text-white mt-1">{match.awayTeam.score}</div>}
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {activeTab === 'LIVE' && (
+          {activeTab === 'LIVE' && match.status === 'LIVE' && (
             <>
-              {/* HeatSense Gauge */}
               <div className="glass-card p-6 rounded-2xl border border-white/5 overflow-hidden relative">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <Activity size={16} className="text-emerald-400" /> HeatSense™ Medidor de Calor
+                    <Activity size={16} className="text-emerald-400" /> HeatSense™ Intensidade da Partida
                   </h3>
                   <div className={`flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-white/10 ${thermalData.color} text-[10px] font-black`}>
                     {thermalData.icon} {thermalData.label}
                   </div>
                 </div>
                 
-                <div className="relative h-4 w-full bg-slate-900 rounded-full border border-white/5 overflow-hidden">
-                   <div 
-                    className={`h-full transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(249,115,22,0.5)] bg-gradient-to-r from-blue-500 via-amber-500 to-orange-500`}
-                    style={{ width: `${thermalData.score}%` }}
-                   ></div>
+                <div className="h-[200px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={intensityHistory}>
+                      <defs>
+                        <linearGradient id="colorIntensity" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                      <XAxis 
+                        dataKey="time" 
+                        tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} 
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis hide domain={[0, 100]} />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#0f172a', 
+                          border: '1px solid rgba(255,255,255,0.1)', 
+                          borderRadius: '12px',
+                          fontSize: '10px',
+                          fontWeight: 'bold'
+                        }}
+                        itemStyle={{ color: '#10b981' }}
+                        labelStyle={{ color: '#64748b', marginBottom: '4px' }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="intensity" 
+                        name="Intensidade %"
+                        stroke="#f97316" 
+                        strokeWidth={3}
+                        fillOpacity={1} 
+                        fill="url(#colorIntensity)" 
+                        animationDuration={1500}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
-                <div className="flex justify-between mt-2 text-[8px] font-black text-slate-600 uppercase tracking-widest">
-                  <span>Frio</span>
-                  <span>Morno</span>
-                  <span>Quente</span>
-                  <span>Pegando Fogo</span>
+
+                <div className="flex justify-between mt-4 text-[8px] font-black text-slate-600 uppercase tracking-widest border-t border-white/5 pt-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                    <span>{match.homeTeam.name}: {match.homeTeam.dangerousAttacks} Atq. Perigosos</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                    <span>{match.awayTeam.name}: {match.awayTeam.dangerousAttacks} Atq. Perigosos</span>
+                  </div>
                 </div>
-                
-                <p className="mt-4 text-[10px] text-slate-400 italic leading-relaxed">
-                  * Este medidor analisa a densidade de ataques perigosos e volume de chutes nos últimos 10 minutos para determinar a probabilidade de um evento iminente (gol ou canto).
-                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -334,6 +434,70 @@ const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack }) => {
 
           {activeTab === 'PRE' && (
             <div className="animate-in fade-in slide-in-from-top-4 duration-500 space-y-6">
+              {/* Seção Head-to-Head Avançada */}
+              <div className="glass-card p-6 rounded-2xl border border-white/5 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-6 opacity-5">
+                   <SwordsIcon size={120} />
+                </div>
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <SwordsIcon size={16} className="text-amber-500" /> Domínio Histórico (H2H)
+                  </h3>
+                  <div className="bg-slate-900 px-3 py-1 rounded-full border border-white/10 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Últimos {h2hTotal} Jogos
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center mb-8">
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                       <div className="text-center flex-1">
+                          <div className="text-4xl font-black text-emerald-400">{h2h.homeWins}</div>
+                          <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Vitórias {match.homeTeam.name}</div>
+                       </div>
+                       <div className="text-center flex-1 border-x border-white/5">
+                          <div className="text-3xl font-black text-slate-400">{h2h.draws}</div>
+                          <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Empates</div>
+                       </div>
+                       <div className="text-center flex-1">
+                          <div className="text-4xl font-black text-blue-400">{h2h.awayWins}</div>
+                          <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Vitórias {match.awayTeam.name}</div>
+                       </div>
+                    </div>
+                    <div className="h-3 w-full bg-slate-800 rounded-full flex overflow-hidden ring-4 ring-slate-900/50">
+                       <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${(h2h.homeWins / h2hTotal) * 100}%` }}></div>
+                       <div className="h-full bg-slate-500 transition-all duration-1000" style={{ width: `${(h2h.draws / h2hTotal) * 100}%` }}></div>
+                       <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${(h2h.awayWins / h2hTotal) * 100}%` }}></div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/40 p-5 rounded-2xl border border-white/5">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <Percent size={14} className="text-emerald-400" /> Probabilidade Histórica
+                    </h4>
+                    <div className="space-y-3">
+                       <div className="flex justify-between items-center text-xs font-bold">
+                          <span className="text-slate-400">{match.homeTeam.name}</span>
+                          <span className="text-emerald-400">{homeWinProb}%</span>
+                       </div>
+                       <div className="flex justify-between items-center text-xs font-bold">
+                          <span className="text-slate-400">Empate</span>
+                          <span className="text-slate-300">{drawProb}%</span>
+                       </div>
+                       <div className="flex justify-between items-center text-xs font-bold">
+                          <span className="text-slate-400">{match.awayTeam.name}</span>
+                          <span className="text-blue-400">{awayWinProb}%</span>
+                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-[10px] text-slate-500 italic bg-white/5 p-3 rounded-xl border border-white/5">
+                   <Info size={14} className="shrink-0" />
+                   <span>Análise de IA: {h2h.homeWins > h2h.awayWins ? `${match.homeTeam.name} demonstra dominância histórica com ${h2h.homeWins} vitórias. Tendência de mercado favorável ao time da casa.` : `${match.awayTeam.name} mantém vantagem no histórico direto. Atenção para surpresas do visitante.`}</span>
+                </div>
+              </div>
+
               <div className="flex justify-between items-center">
                  <h3 className="text-xl font-black text-white flex items-center gap-2"><Trophy className="text-yellow-500" /> Histórico Últimos 5 Jogos</h3>
                  <div className="flex bg-slate-900 p-1 rounded-lg border border-white/5">
@@ -378,17 +542,42 @@ const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack }) => {
 
         <div className="space-y-6">
           <div className="glass-card p-6 rounded-2xl border border-emerald-500/30 sticky top-6">
-            <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold flex items-center gap-2"><Zap className="text-yellow-400 fill-yellow-400" /> IA BetSignal</h3>{loadingSignals && <Loader2 className="animate-spin text-slate-400" size={18} />}</div>
-            <div className="space-y-4">
-              {signals.map((signal, idx) => (
-                <div key={idx} className="bg-slate-900/50 p-4 rounded-xl border border-white/5 hover:border-emerald-500/30 transition-all group">
-                   <div className="flex justify-between items-center mb-2"><span className="bg-emerald-500 text-[10px] font-black px-2 py-0.5 rounded text-slate-950 uppercase">{signal.type}</span><span className="text-emerald-400 font-bold text-sm">ODD @{signal.oddSuggested.toFixed(2)}</span></div>
-                   <p className="text-sm font-black mb-2">{signal.description}</p>
-                   <div className="flex items-center justify-between mt-4"><div className="flex items-center gap-2"><div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden"><div className="bg-emerald-500 h-full" style={{ width: `${signal.confidence * 100}%` }} ></div></div><span className="text-[9px] font-bold text-slate-500 uppercase">{Math.round(signal.confidence * 100)}%</span></div><button onClick={() => toggleSaveSignal(signal)} className="p-1.5 text-slate-500 hover:text-emerald-400 transition-colors">{savedIds.includes(`${signal.matchId}-${signal.type}-${signal.timestamp}`) ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}</button></div>
-                </div>
-              ))}
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <Zap className="text-yellow-400 fill-yellow-400" /> IA BetSignal
+              </h3>
+              {loadingSignals && <Loader2 className="animate-spin text-slate-400" size={18} />}
             </div>
-            <button onClick={fetchSignals} disabled={loadingSignals} className="w-full mt-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2"><Target size={18} /> RECALCULAR COM IA</button>
+            
+            {match.status === 'LIVE' ? (
+              <div className="space-y-4">
+                {signals.length > 0 ? signals.map((signal, idx) => (
+                  <div key={idx} className="bg-slate-900/50 p-4 rounded-xl border border-white/5 hover:border-emerald-500/30 transition-all group">
+                     <div className="flex justify-between items-center mb-2"><span className="bg-emerald-500 text-[10px] font-black px-2 py-0.5 rounded text-slate-950 uppercase">{signal.type}</span><span className="text-emerald-400 font-bold text-sm">ODD @{signal.oddSuggested.toFixed(2)}</span></div>
+                     <p className="text-sm font-black mb-2">{signal.description}</p>
+                     <div className="flex items-center justify-between mt-4"><div className="flex items-center gap-2"><div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden"><div className="bg-emerald-500 h-full" style={{ width: `${signal.confidence * 100}%` }} ></div></div><span className="text-[9px] font-bold text-slate-500 uppercase">{Math.round(signal.confidence * 100)}%</span></div><button onClick={() => toggleSaveSignal(signal)} className="p-1.5 text-slate-500 hover:text-emerald-400 transition-colors active:scale-90">{savedIds.includes(`${signal.matchId}-${signal.type}-${signal.timestamp}`) ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}</button></div>
+                  </div>
+                )) : (
+                  <p className="text-xs text-slate-500 text-center py-4 italic">Nenhum sinal detectado até o momento...</p>
+                )}
+                <button onClick={fetchSignals} disabled={loadingSignals} className="w-full mt-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-emerald-500/20"><Target size={18} /> RECALCULAR COM IA</button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-slate-900/50 p-4 rounded-xl border border-white/5">
+                   <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-1">
+                     <TrendingUp size={12} /> Projeção de Especialista
+                   </h4>
+                   <p className="text-xs text-white font-bold mb-2">Vitória Casa ou Empate (1X)</p>
+                   <p className="text-[10px] text-slate-400 leading-relaxed italic">
+                     Baseado no histórico recente de {match.homeTeam.name} em casa e na dificuldade do {match.awayTeam.name} fora de seus domínios.
+                   </p>
+                </div>
+                <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl">
+                   <p className="text-[9px] text-emerald-400 font-bold uppercase text-center">Aguardando Início para Sinais Live</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -5,8 +5,11 @@ import MatchCard from './components/MatchCard';
 import MatchDetail from './components/MatchDetail';
 import LiveSignalsFeed from './components/LiveSignalsFeed';
 import ReadyTicketsFeed from './components/ReadyTicketsFeed';
+import HistoryView from './components/HistoryView';
+import StatsView from './components/StatsView';
+import PreMatchView from './components/PreMatchView';
 import { generateBettingSignals, generateReadyTickets } from './services/geminiService';
-import { LayoutDashboard, Bell, BarChart2, User, Globe, Search, RefreshCw, Zap, Filter, Trash2, Calendar, Shield, TrendingUp, Radio, Ticket, AlertCircle, Download } from 'lucide-react';
+import { LayoutDashboard, Bell, Globe, Search, Zap, Trash2, Calendar, Shield, TrendingUp, Radio, Ticket, History, PieChart, Clock, CheckCircle2, Target, Award, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
 const generateMockHistory = (teamName: string, isHomeMode: boolean): HistoricalMatchStats[] => {
   const opponents = ['Arsenal', 'Chelsea', 'Spurs', 'Newcastle', 'Aston Villa', 'Everton', 'West Ham'];
@@ -112,125 +115,211 @@ const INITIAL_MATCHES: Match[] = [
       homeHistory: { overall: generateMockHistory('Real Madrid', false), specific: generateMockHistory('Real Madrid', true) },
       awayHistory: { overall: generateMockHistory('Barcelona', false), specific: generateMockHistory('Barcelona', true) }
     }
+  },
+  {
+    id: 'm3',
+    league: 'Bundesliga',
+    minute: 0,
+    status: 'SCHEDULED',
+    scheduledTime: '15:30',
+    homeTeam: { 
+      name: 'Bayern Munich', score: 0, possession: 0, shotsOnTarget: 0, shotsOffTarget: 0, corners: 0, yellowCards: 0, redCards: 0, dangerousAttacks: 0, attacks: 0,
+      players: generateMockPlayers('Bayern Munich')
+    },
+    awayTeam: { 
+      name: 'Dortmund', score: 0, possession: 0, shotsOnTarget: 0, shotsOffTarget: 0, corners: 0, yellowCards: 0, redCards: 0, dangerousAttacks: 0, attacks: 0,
+      players: generateMockPlayers('Dortmund')
+    },
+    preMatch: {
+      homeForm: ['W', 'W', 'L', 'W', 'D'],
+      awayForm: ['D', 'W', 'W', 'W', 'W'],
+      leaguePosition: { home: 1, away: 2 },
+      h2h: { homeWins: 18, draws: 4, awayWins: 8 },
+      avgGoals: { home: 3.1, away: 2.2 },
+      avgCorners: { home: 8.1, away: 5.4 },
+      homeHistory: { overall: generateMockHistory('Bayern Munich', false), specific: generateMockHistory('Bayern Munich', true) },
+      awayHistory: { overall: generateMockHistory('Dortmund', false), specific: generateMockHistory('Dortmund', true) }
+    }
   }
 ];
+
+const TopStatsHeader: React.FC<{ signals: BettingSignal[]; isOnline: boolean; lastSync: Date | null }> = ({ signals, isOnline, lastSync }) => {
+  const stats = useMemo(() => {
+    const resolved = signals.filter(s => s.status !== 'PENDING');
+    const wins = resolved.filter(s => s.status === 'WIN').length;
+    const rate = resolved.length > 0 ? (wins / resolved.length) * 100 : 0;
+    const avgOdd = resolved.length > 0 ? resolved.reduce((acc, s) => acc + s.oddSuggested, 0) / resolved.length : 0;
+
+    return { wins, rate, avgOdd };
+  }, [signals]);
+
+  return (
+    <div className="space-y-4 mb-8">
+      {/* Barra de Status de Sincronização */}
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/40 rounded-xl border border-white/5">
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${
+            isOnline ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+          }`}>
+            {isOnline ? <Wifi size={12} className="animate-pulse" /> : <WifiOff size={12} />}
+            {isOnline ? 'Conectado' : 'Offline'}
+          </div>
+          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+            <RefreshCw size={12} className={isOnline ? 'animate-spin-slow' : ''} />
+            Auto-Sync: {lastSync ? lastSync.toLocaleTimeString('pt-BR') : 'Aguardando...'}
+          </div>
+        </div>
+        <div className="hidden md:block text-[9px] font-black text-slate-600 uppercase tracking-[0.2em]">
+          BetSignal Live Sync Engine v2.5
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="glass-card p-4 rounded-2xl border-l-4 border-emerald-500 flex items-center gap-4">
+          <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-400">
+            <CheckCircle2 size={24} />
+          </div>
+          <div>
+            <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Greens Hoje</div>
+            <div className="text-xl font-black text-white">{stats.wins}</div>
+          </div>
+        </div>
+        <div className="glass-card p-4 rounded-2xl border-l-4 border-blue-500 flex items-center gap-4">
+          <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400">
+            <Target size={24} />
+          </div>
+          <div>
+            <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Assertividade</div>
+            <div className="text-xl font-black text-white">{stats.rate.toFixed(0)}%</div>
+          </div>
+        </div>
+        <div className="glass-card p-4 rounded-2xl border-l-4 border-amber-500 flex items-center gap-4">
+          <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center text-amber-400">
+            <TrendingUp size={24} />
+          </div>
+          <div>
+            <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Odd Média</div>
+            <div className="text-xl font-black text-white">@{stats.avgOdd > 0 ? stats.avgOdd.toFixed(2) : '1.85'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.DASHBOARD);
   const [matches, setMatches] = useState<Match[]>(INITIAL_MATCHES);
   const [globalLiveSignals, setGlobalLiveSignals] = useState<BettingSignal[]>([]);
+  const [allSignalsHistory, setAllSignalsHistory] = useState<BettingSignal[]>(() => {
+    return JSON.parse(localStorage.getItem('betsignal_history') || '[]');
+  });
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [savedSignals, setSavedSignals] = useState<any[]>([]);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [readyTickets, setReadyTickets] = useState<ReadyTicket[]>([]);
   const [isLoadingTickets, setIsLoadingTickets] = useState(false);
   const [ticketError, setTicketError] = useState<string | null>(null);
   
-  // PWA states
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstallBtn, setShowInstallBtn] = useState(false);
+  // Estados de Conectividade e Sync
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<Date | null>(new Date());
 
   const matchesRef = useRef(matches);
   matchesRef.current = matches;
-  const isQuotaExceededRef = useRef(false);
 
+  // Monitoramento de Conexão Internet
   useEffect(() => {
-    // Escuta pelo evento de instalação do PWA
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShowInstallBtn(true);
-    });
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Ao voltar a ficar online, forçamos um refresh dos sinais
+      triggerSignalSync();
+    };
+    const handleOffline = () => setIsOnline(false);
 
-    window.addEventListener('appinstalled', () => {
-      setShowInstallBtn(false);
-      setDeferredPrompt(null);
-    });
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
-      setShowInstallBtn(false);
-    }
-  };
+  useEffect(() => {
+    localStorage.setItem('betsignal_history', JSON.stringify(allSignalsHistory));
+  }, [allSignalsHistory]);
 
+  // Simulador de Atualização de Partidas (Stats e Minutos)
   useEffect(() => {
     const interval = setInterval(() => {
+      // Só atualizamos se estivermos "online" (simulação lógica)
+      if (!isOnline) return;
+
       setMatches(prev => prev.map(m => {
-        if (m.minute >= 90) return m;
-        const luckyHome = Math.random() > 0.95;
-        const luckyAway = Math.random() > 0.97;
+        if (m.status === 'SCHEDULED' || m.minute >= 90) return m;
         return {
           ...m,
-          minute: m.minute + (Math.random() > 0.7 ? 1 : 0),
+          minute: m.minute + (Math.random() > 0.8 ? 1 : 0),
           homeTeam: {
             ...m.homeTeam,
-            score: luckyHome ? m.homeTeam.score + 1 : m.homeTeam.score,
-            corners: Math.random() > 0.9 ? m.homeTeam.corners + 1 : m.homeTeam.corners,
+            score: Math.random() > 0.98 ? m.homeTeam.score + 1 : m.homeTeam.score,
             dangerousAttacks: m.homeTeam.dangerousAttacks + Math.floor(Math.random() * 2),
-            shotsOnTarget: Math.random() > 0.95 ? m.homeTeam.shotsOnTarget + 1 : m.homeTeam.shotsOnTarget
+            shotsOnTarget: Math.random() > 0.96 ? m.homeTeam.shotsOnTarget + 1 : m.homeTeam.shotsOnTarget
           },
           awayTeam: {
             ...m.awayTeam,
-            score: luckyAway ? m.awayTeam.score + 1 : m.awayTeam.score,
-            corners: Math.random() > 0.92 ? m.awayTeam.corners + 1 : m.awayTeam.corners,
+            score: Math.random() > 0.99 ? m.awayTeam.score + 1 : m.awayTeam.score,
             dangerousAttacks: m.awayTeam.dangerousAttacks + Math.floor(Math.random() * 2),
-            shotsOnTarget: Math.random() > 0.97 ? m.awayTeam.shotsOnTarget + 1 : m.awayTeam.shotsOnTarget
+            shotsOnTarget: Math.random() > 0.98 ? m.awayTeam.shotsOnTarget + 1 : m.awayTeam.shotsOnTarget
           }
         };
       }));
     }, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isOnline]);
 
-  useEffect(() => {
-    const signalGenerator = setInterval(async () => {
-      if (isQuotaExceededRef.current) {
-        isQuotaExceededRef.current = false;
-        return;
-      }
+  // Função centralizada para sincronização de sinais IA
+  const triggerSignalSync = async () => {
+    if (!navigator.onLine) return;
 
-      const activeMatches = matchesRef.current.filter(m => m.minute < 90);
-      if (activeMatches.length === 0) return;
-      const randomMatch = activeMatches[Math.floor(Math.random() * activeMatches.length)];
-      
-      const dpm = (randomMatch.homeTeam.dangerousAttacks + randomMatch.awayTeam.dangerousAttacks) / randomMatch.minute;
-      if (dpm < 0.8) return;
+    const activeMatches = matchesRef.current.filter(m => m.status === 'LIVE' && m.minute < 90);
+    if (activeMatches.length === 0) return;
+    
+    const batch = activeMatches.sort(() => 0.5 - Math.random()).slice(0, 2);
 
-      try {
-        const result = await generateBettingSignals(randomMatch);
-        if (result && result.length > 0) {
-          const newSignalsWithMeta = result.map(s => ({
+    try {
+      const result = await generateBettingSignals(batch);
+      if (result && result.length > 0) {
+        const newSignalsWithMeta = result.map(s => {
+          const match = batch.find(m => m.id === s.matchId);
+          return {
             ...s,
-            matchName: `${randomMatch.homeTeam.name} vs ${randomMatch.awayTeam.name}`,
-            leagueName: randomMatch.league,
-            minute: randomMatch.minute
-          }));
-          setGlobalLiveSignals(prev => [...newSignalsWithMeta, ...prev].slice(0, 20));
-        }
-      } catch (err: any) { 
-        if (err?.message?.includes('429')) {
-          isQuotaExceededRef.current = true;
-          console.warn("[App] Sinalizador pausado por excesso de cota.");
-        }
-        console.error(err); 
+            status: 'PENDING',
+            fullTimestamp: Date.now(),
+            matchName: match ? `${match.homeTeam.name} vs ${match.awayTeam.name}` : 'Partida Desconhecida',
+            leagueName: match ? match.league : 'Liga',
+            minute: match ? match.minute : 0
+          } as BettingSignal;
+        });
+        
+        setGlobalLiveSignals(prev => [...newSignalsWithMeta, ...prev].slice(0, 30));
+        setAllSignalsHistory(prev => [...newSignalsWithMeta, ...prev]);
+        setLastSyncTimestamp(new Date());
       }
-    }, 50000);
-    return () => clearInterval(signalGenerator);
-  }, []);
+    } catch (err) {
+      console.warn("[App Sync] Falha na sincronização de sinais:", err);
+    }
+  };
 
+  // Ciclo de Polling de Sinais de IA
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem('saved_bet_signals') || '[]');
-    setSavedSignals(saved);
-    setSavedIds(saved.map((s: any) => `${s.matchId}-${s.type}-${s.timestamp}`));
-  }, [viewMode]);
+    const signalGenerator = setInterval(() => {
+      if (isOnline) {
+        triggerSignalSync();
+      }
+    }, 45000);
+    return () => clearInterval(signalGenerator);
+  }, [isOnline]);
 
   const toggleSaveSignal = (signal: BettingSignal) => {
     const signalId = `${signal.matchId}-${signal.type}-${signal.timestamp}`;
@@ -238,103 +327,103 @@ const App: React.FC = () => {
     if (savedIds.includes(signalId)) {
       const filtered = currentSaved.filter((s: any) => `${s.matchId}-${s.type}-${s.timestamp}` !== signalId);
       localStorage.setItem('saved_bet_signals', JSON.stringify(filtered));
-      setSavedSignals(filtered);
       setSavedIds(prev => prev.filter(id => id !== signalId));
     } else {
-      const signalToSave = { ...signal, homeTeamName: signal.matchName?.split(' vs ')[0] || '', awayTeamName: signal.matchName?.split(' vs ')[1] || '', league: signal.leagueName || '' };
-      const updated = [signalToSave, ...currentSaved];
+      const updated = [signal, ...currentSaved];
       localStorage.setItem('saved_bet_signals', JSON.stringify(updated));
-      setSavedSignals(updated);
       setSavedIds(prev => [signalId, ...prev]);
     }
   };
 
-  const removeSavedSignal = (signalId: string) => {
-    const updated = savedSignals.filter(s => `${s.matchId}-${s.type}-${s.timestamp}` !== signalId);
-    localStorage.setItem('saved_bet_signals', JSON.stringify(updated));
-    setSavedSignals(updated);
-    setSavedIds(prev => prev.filter(id => id !== signalId));
-  };
-
-  const handleFetchTickets = async () => {
-    setIsLoadingTickets(true);
-    setTicketError(null);
-    try {
-      const active = matches.filter(m => m.minute < 90);
-      const result = await generateReadyTickets(active);
-      setReadyTickets(result);
-    } catch (err: any) { 
-      console.error(err);
-      if (err?.message?.includes('429')) {
-        setTicketError("A IA atingiu o limite de consultas por minuto. Por favor, aguarde 30 segundos e tente novamente.");
-      } else {
-        setTicketError("Ocorreu um erro ao gerar os bilhetes. Tente novamente mais tarde.");
-      }
-    } finally { 
-      setIsLoadingTickets(false); 
-    }
-  };
-
-  const leagues = useMemo(() => Array.from(new Set(matches.map(m => m.league))).sort(), [matches]);
   const filteredMatches = useMemo(() => matches.filter(match => {
-    const matchesLeague = !selectedLeague || match.league === selectedLeague;
-    const matchesSearch = match.homeTeam.name.toLowerCase().includes(searchQuery.toLowerCase()) || match.awayTeam.name.toLowerCase().includes(searchQuery.toLowerCase()) || match.league.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesLeague && matchesSearch;
-  }), [matches, selectedLeague, searchQuery]);
+    if (match.status !== 'LIVE') return false;
+    return match.homeTeam.name.toLowerCase().includes(searchQuery.toLowerCase()) || match.awayTeam.name.toLowerCase().includes(searchQuery.toLowerCase());
+  }), [matches, searchQuery]);
 
   return (
     <div className="min-h-screen pb-24 lg:pb-0 lg:pl-64">
-      <nav className="fixed bottom-0 left-0 right-0 h-20 glass-card lg:h-screen lg:w-64 lg:right-auto z-50 flex lg:flex-col items-center justify-around lg:justify-start lg:p-6 lg:gap-8 border-t lg:border-t-0 lg:border-r border-white/10">
-        <div className="hidden lg:flex items-center gap-3 mb-10">
-          <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-            <Zap className="text-slate-950 fill-slate-950" size={24} />
+      {/* Sidebar Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 h-20 glass-card lg:h-screen lg:w-64 lg:right-auto z-50 flex lg:flex-col items-center justify-around lg:justify-start lg:p-6 lg:gap-8 border-t lg:border-t-0 lg:border-r border-white/5">
+        <div className="hidden lg:flex flex-col items-center gap-1 mb-10 w-full">
+          <div className="w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20 mb-2">
+            <Zap className="text-slate-950 fill-slate-950" size={32} />
           </div>
           <span className="text-xl font-black tracking-tighter">BETSIGNAL <span className="text-emerald-400">PRO</span></span>
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full border border-white/10 mt-2">
+            <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+              {isOnline ? 'IA Core Online' : 'Core Offline'}
+            </span>
+          </div>
         </div>
         
-        <div className="flex lg:flex-col w-full gap-2 lg:gap-4 justify-around lg:justify-start px-2 lg:px-0">
-          <NavItem icon={<LayoutDashboard />} label="Jogos" active={viewMode === ViewMode.DASHBOARD || viewMode === ViewMode.DETAILS} onClick={() => setViewMode(ViewMode.DASHBOARD)} />
-          <NavItem icon={<Radio />} label="Sinais Live" active={viewMode === ViewMode.LIVE_SIGNALS} onClick={() => setViewMode(ViewMode.LIVE_SIGNALS)} badge={globalLiveSignals.length > 0 ? globalLiveSignals.length : undefined} />
-          <NavItem icon={<Ticket />} label="Bilhetes IA" active={viewMode === ViewMode.TICKETS} onClick={() => setViewMode(ViewMode.TICKETS)} />
-          <NavItem icon={<Bell />} label="Meus Sinais" active={viewMode === ViewMode.SIGNALS} onClick={() => setViewMode(ViewMode.SIGNALS)} />
+        <div className="flex lg:flex-col w-full gap-2 lg:gap-3 justify-around lg:justify-start px-2 lg:px-0">
+          <NavItem icon={<LayoutDashboard />} label="Jogos" active={viewMode === ViewMode.DASHBOARD} onClick={() => setViewMode(ViewMode.DASHBOARD)} />
+          <NavItem icon={<Calendar />} label="Pré-Jogo" active={viewMode === ViewMode.PRE_MATCH} onClick={() => setViewMode(ViewMode.PRE_MATCH)} />
+          <NavItem icon={<Radio />} label="Ao Vivo" active={viewMode === ViewMode.LIVE_SIGNALS} onClick={() => setViewMode(ViewMode.LIVE_SIGNALS)} badge={globalLiveSignals.length > 0 ? globalLiveSignals.length : undefined} />
+          <NavItem icon={<History />} label="Histórico" active={viewMode === ViewMode.HISTORY} onClick={() => setViewMode(ViewMode.HISTORY)} />
+          <NavItem icon={<PieChart />} label="Stats" active={viewMode === ViewMode.STATS} onClick={() => setViewMode(ViewMode.STATS)} />
+          <NavItem icon={<Ticket />} label="Bilhetes" active={viewMode === ViewMode.TICKETS} onClick={() => setViewMode(ViewMode.TICKETS)} />
+          <NavItem icon={<Bell />} label="Salvos" active={viewMode === ViewMode.SIGNALS} onClick={() => setViewMode(ViewMode.SIGNALS)} />
         </div>
-
-        {/* Botão de Instalação para PWA */}
-        {showInstallBtn && (
-          <div className="hidden lg:block mt-auto w-full pt-6 border-t border-white/10">
-            <button 
-              onClick={handleInstallClick}
-              className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white p-4 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 animate-pulse hover:animate-none transition-all"
-            >
-              <Download size={18} /> BAIXAR APP PRO
-            </button>
-          </div>
-        )}
       </nav>
 
       <main className="max-w-6xl mx-auto p-4 lg:p-10">
+        <TopStatsHeader signals={allSignalsHistory} isOnline={isOnline} lastSync={lastSyncTimestamp} />
+
         {viewMode === ViewMode.DASHBOARD && (
           <div className="animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-              <div><h1 className="text-3xl font-black mb-1">Jogos Ao Vivo</h1><p className="text-slate-400 text-sm">Monitorando {filteredMatches.length} eventos em tempo real com IA.</p></div>
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1 md:w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} /><input type="text" placeholder="Buscar time ou liga..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all text-white" /></div>
-                <button onClick={() => { setIsRefreshing(true); setTimeout(() => setIsRefreshing(false), 1000); }} className="p-2.5 bg-slate-800 rounded-xl hover:bg-slate-700 transition-colors"><RefreshCw className={`${isRefreshing ? 'animate-spin' : ''} text-emerald-400`} size={20} /></button>
-              </div>
+              <div><h1 className="text-3xl font-black mb-1">Live Dashboard</h1><p className="text-slate-400 text-sm">IA monitorando estatísticas de campo em tempo real.</p></div>
+              <div className="relative flex-1 md:w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} /><input type="text" placeholder="Buscar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-900/50 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all text-white" /></div>
             </div>
-            <div className="mb-8 overflow-x-auto pb-2 scrollbar-hide"><div className="flex items-center gap-2"><div className="flex items-center gap-2 text-slate-400 mr-2 border-r border-white/10 pr-4"><Filter size={16} /><span className="text-xs font-bold uppercase tracking-wider">Ligas</span></div><button onClick={() => setSelectedLeague(null)} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-all border ${selectedLeague === null ? 'bg-emerald-500 border-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20' : 'glass-card border-white/10 text-slate-400 hover:border-emerald-500/30'}`}>Todas</button>{leagues.map(league => (<button key={league} onClick={() => setSelectedLeague(league)} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-all border ${selectedLeague === league ? 'bg-emerald-500 border-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20' : 'glass-card border-white/10 text-slate-400 hover:border-emerald-500/30'}`}>{league}</button>))}</div></div>
-            {filteredMatches.length > 0 ? (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">{filteredMatches.map(match => (<MatchCard key={match.id} match={match} onClick={(m) => { setSelectedMatch(m); setViewMode(ViewMode.DETAILS); }} />))}</div>) : (<div className="text-center py-20 glass-card rounded-2xl border-dashed border-2 border-white/5"><Globe size={48} className="mx-auto mb-4 text-slate-700" /><h3 className="text-xl font-bold text-slate-300">Nenhum jogo encontrado</h3><p className="text-slate-500 mt-2">Tente mudar os filtros.</p></div>)}
+            
+            {!isOnline && (
+              <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center justify-between">
+                 <div className="flex items-center gap-3 text-rose-400">
+                    <WifiOff size={20} />
+                    <div>
+                       <p className="text-xs font-black uppercase tracking-widest">Sem Conexão com a Internet</p>
+                       <p className="text-[10px] opacity-70">Os dados ao vivo estão pausados até que a rede seja restabelecida.</p>
+                    </div>
+                 </div>
+                 <button onClick={() => window.location.reload()} className="p-2 bg-rose-500/20 rounded-lg text-rose-400 hover:bg-rose-500/30 transition-all">
+                    <RefreshCw size={16} />
+                 </button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredMatches.map(match => (<MatchCard key={match.id} match={match} onClick={(m) => { setSelectedMatch(m); setViewMode(ViewMode.DETAILS); }} />))}
+            </div>
           </div>
         )}
-        {viewMode === ViewMode.LIVE_SIGNALS && (<div className="animate-in fade-in duration-500"><div className="flex items-center justify-between mb-8"><div><h1 className="text-3xl font-black mb-1 flex items-center gap-3">Feed de Sinais <Radio className="text-rose-500 animate-pulse" size={24} /></h1><p className="text-slate-400 text-sm">Sinais gerados automaticamente.</p></div></div><LiveSignalsFeed signals={globalLiveSignals} onSave={toggleSaveSignal} savedIds={savedIds} /></div>)}
-        {viewMode === ViewMode.TICKETS && (<ReadyTicketsFeed tickets={readyTickets} isLoading={isLoadingTickets} onGenerate={handleFetchTickets} error={ticketError} />)}
-        {viewMode === ViewMode.DETAILS && selectedMatch && (<MatchDetail match={selectedMatch} onBack={() => setViewMode(ViewMode.DASHBOARD)} />)}
-        {viewMode === ViewMode.SIGNALS && (<div className="animate-in fade-in zoom-in duration-300"><div className="flex items-center justify-between mb-8"><div><h1 className="text-3xl font-black mb-1">Meus Sinais</h1><p className="text-slate-400 text-sm">Sinais que você salvou.</p></div></div>{savedSignals.length > 0 ? (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{savedSignals.map((signal) => { const signalId = `${signal.matchId}-${signal.type}-${signal.timestamp}`; return (<div key={signalId} className="glass-card p-5 rounded-2xl border-l-4 border-l-emerald-500 hover:bg-slate-800 transition-all relative group"><button onClick={() => removeSavedSignal(signalId)} className="absolute top-4 right-4 text-slate-600 hover:text-rose-500 transition-colors p-1"><Trash2 size={16} /></button><div className="mb-4"><h3 className="text-sm font-black text-white truncate">{signal.homeTeamName} vs {signal.awayTeamName}</h3><div className="flex items-center gap-2 mt-1"><span className="bg-emerald-500 text-[10px] font-black px-2 py-0.5 rounded text-slate-950 uppercase">{signal.type}</span></div></div><div className="bg-slate-950/40 p-3 rounded-xl mb-4 border border-white/5"><p className="text-xs text-slate-200 font-bold mb-1">{signal.description}</p></div><div className="flex items-center justify-between"><div className="flex items-center gap-1 text-emerald-400 font-black text-sm"><TrendingUp size={14} /><span>ODD @{signal.oddSuggested.toFixed(2)}</span></div></div></div>); })}</div>) : (<div className="text-center py-24 glass-card rounded-2xl border-dashed border-2 border-white/5"><Bell size={64} className="mx-auto mb-6 text-slate-700" /><h2 className="text-2xl font-bold mb-2 text-slate-300">Sem sinais salvos</h2></div>)}</div>)}
+
+        {viewMode === ViewMode.PRE_MATCH && (<PreMatchView matches={matches.filter(m => m.status === 'SCHEDULED')} onSelectMatch={(m) => { setSelectedMatch(m); setViewMode(ViewMode.DETAILS); }} />)}
+        {viewMode === ViewMode.LIVE_SIGNALS && (<LiveSignalsFeed signals={globalLiveSignals} onSave={toggleSaveSignal} savedIds={savedIds} />)}
+        {viewMode === ViewMode.HISTORY && (<HistoryView signals={allSignalsHistory} />)}
+        {viewMode === ViewMode.STATS && (<StatsView signals={allSignalsHistory} />)}
+        {viewMode === ViewMode.TICKETS && (<ReadyTicketsFeed tickets={readyTickets} isLoading={isLoadingTickets} onGenerate={async () => {
+          setIsLoadingTickets(true);
+          try {
+            const active = matches.filter(m => m.status === 'LIVE');
+            const result = await generateReadyTickets(active);
+            setReadyTickets(result);
+          } catch (e) { setTicketError("Erro na IA."); }
+          finally { setIsLoadingTickets(false); }
+        }} error={ticketError} />)}
+        {viewMode === ViewMode.DETAILS && selectedMatch && (<MatchDetail match={selectedMatch} onBack={() => setViewMode(selectedMatch.status === 'LIVE' ? ViewMode.DASHBOARD : ViewMode.PRE_MATCH)} />)}
       </main>
     </div>
   );
 };
 
-const NavItem: React.FC<{ icon: React.ReactNode; label: string; active: boolean; onClick?: () => void; badge?: number; }> = ({ icon, label, active, onClick, badge }) => (<button onClick={onClick} className={`flex flex-col lg:flex-row items-center gap-1 lg:gap-4 w-full lg:px-4 lg:py-3 rounded-xl transition-all relative ${active ? 'text-emerald-400 lg:bg-emerald-500/10 lg:text-white' : 'text-slate-500 hover:text-slate-300 lg:hover:bg-white/5'}`}><span className={`${active ? 'scale-110' : ''} transition-transform`}>{icon}</span><span className="text-[10px] lg:text-base font-medium lg:font-bold">{label}</span>{badge && !active && (<span className="absolute top-0 right-1 lg:right-4 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full border-2 border-slate-900 animate-bounce">{badge > 9 ? '9+' : badge}</span>)}</button>);
+const NavItem: React.FC<{ icon: React.ReactNode; label: string; active: boolean; onClick?: () => void; badge?: number; }> = ({ icon, label, active, onClick, badge }) => (
+  <button onClick={onClick} className={`flex flex-col lg:flex-row items-center gap-1 lg:gap-4 w-full lg:px-4 lg:py-3.5 rounded-2xl transition-all relative ${active ? 'text-emerald-400 lg:bg-emerald-500/10 lg:text-white lg:shadow-lg lg:shadow-emerald-500/5' : 'text-slate-500 hover:text-slate-300 lg:hover:bg-white/5'}`}>
+    <span className={`${active ? 'scale-110 text-emerald-400' : ''} transition-transform`}>{icon}</span>
+    <span className="text-[10px] lg:text-[13px] font-black uppercase tracking-widest">{label}</span>
+    {badge && !active && (<span className="absolute top-1 right-1 lg:right-4 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full border-2 border-slate-900 animate-bounce">{badge > 9 ? '9+' : badge}</span>)}
+  </button>
+);
 
 export default App;

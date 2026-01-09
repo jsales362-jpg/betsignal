@@ -1,7 +1,8 @@
 
 {
-  "short_name": "BetSignal",
-  "name": "BetSignal Pro - Futebol Ao Vivo",
+  "short_name": "PrincipeBet",
+  "name": "PrincipeBet - Futebol e Sinais IA",
+  "description": "Análise avançada de futebol ao vivo com sinais de IA em tempo real.",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/5358/5358643.png",
@@ -19,6 +20,17 @@
   "start_url": ".",
   "display": "standalone",
   "theme_color": "#0f172a",
-  "background_color": "#0f172a",
-  "orientation": "portrait"
+  "background_color": "#020617",
+  "orientation": "portrait",
+  "scope": "/",
+  "categories": ["sports", "entertainment"],
+  "screenshots": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/5358/5358643.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "IA Match Analysis"
+    }
+  ]
 }

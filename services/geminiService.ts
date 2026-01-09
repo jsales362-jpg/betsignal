@@ -22,46 +22,40 @@ async function safeApiCall<T>(fn: () => Promise<T>, retries = 3, delay = 2000): 
   }
 }
 
-export async function generateBettingSignals(match: Match): Promise<BettingSignal[]> {
-  const preMatchContext = match.preMatch ? `
-    CONTEXTO PRÉ-JOGO:
-    - Forma ${match.homeTeam.name}: ${match.preMatch.homeForm.join(', ')} (Posição: ${match.preMatch.leaguePosition.home})
-    - Forma ${match.awayTeam.name}: ${match.preMatch.awayForm.join(', ')} (Posição: ${match.preMatch.leaguePosition.away})
-    - H2H Histórico: ${match.preMatch.h2h.homeWins}V ${match.homeTeam.name}, ${match.preMatch.h2h.draws}E, ${match.preMatch.h2h.awayWins}V ${match.awayTeam.name}
-    - Médias Históricas: Gols (${match.preMatch.avgGoals.home}/${match.preMatch.avgGoals.away}), Cantos (${match.preMatch.avgCorners.home}/${match.preMatch.avgCorners.away})
-  ` : '';
+export async function generateBettingSignals(matches: Match[]): Promise<BettingSignal[]> {
+  if (matches.length === 0) return [];
+
+  const matchesContext = matches.map(match => {
+    const preMatchContext = match.preMatch ? `
+      CONTEXTO PRÉ-JOGO:
+      - Forma ${match.homeTeam.name}: ${match.preMatch.homeForm.join(', ')} (Posição: ${match.preMatch.leaguePosition.home})
+      - Forma ${match.awayTeam.name}: ${match.preMatch.awayForm.join(', ')} (Posição: ${match.preMatch.leaguePosition.away})
+      - Médias Históricas: Gols (${match.preMatch.avgGoals.home}/${match.preMatch.avgGoals.away}), Cantos (${match.preMatch.avgCorners.home}/${match.preMatch.avgCorners.away})
+    ` : '';
+
+    return `
+      DADOS AO VIVO (ID: ${match.id}):
+      Jogo: ${match.homeTeam.name} (${match.homeTeam.score}) vs ${match.awayTeam.name} (${match.awayTeam.score})
+      Minuto: ${match.minute}' | Liga: ${match.league}
+      Estatísticas ${match.homeTeam.name}: Posse ${match.homeTeam.possession}%, Cantos ${match.homeTeam.corners}, Ataques Perigosos ${match.homeTeam.dangerousAttacks}, Chutes no Alvo ${match.homeTeam.shotsOnTarget}
+      Estatísticas ${match.awayTeam.name}: Posse ${match.awayTeam.possession}%, Cantos ${match.awayTeam.corners}, Ataques Perigosos ${match.awayTeam.dangerousAttacks}, Chutes no Alvo ${match.awayTeam.shotsOnTarget}
+      ${preMatchContext}
+    `;
+  }).join('\n---\n');
 
   const prompt = `
-    Analise os dados estatísticos deste jogo de futebol ao vivo E o contexto histórico para gerar 1 ou 2 sinais de apostas prováveis.
+    Analise os dados estatísticos deste lote de jogos de futebol ao vivo para gerar sinais de apostas prováveis.
+    Para cada jogo, você pode gerar 0, 1 ou 2 sinais dependendo da intensidade da partida.
     
-    DADOS AO VIVO:
-    Jogo: ${match.homeTeam.name} (${match.homeTeam.score}) vs ${match.awayTeam.name} (${match.awayTeam.score})
-    Minuto: ${match.minute}'
-    Liga: ${match.league}
-    
-    Estatísticas ${match.homeTeam.name}:
-    - Posse: ${match.homeTeam.possession}%
-    - Chutes no Gol: ${match.homeTeam.shotsOnTarget}
-    - Escanteios: ${match.homeTeam.corners}
-    - Ataques Perigosos: ${match.homeTeam.dangerousAttacks}
-    
-    Estatísticas ${match.awayTeam.name}:
-    - Posse: ${match.awayTeam.possession}%
-    - Chutes no Gol: ${match.awayTeam.shotsOnTarget}
-    - Escanteios: ${match.awayTeam.corners}
-    - Ataques Perigosos: ${match.awayTeam.dangerousAttacks}
-    
-    ${preMatchContext}
+    LOTE DE JOGOS:
+    ${matchesContext}
 
-    Para cada sinal, forneça:
-    1. Descrição clara do mercado.
-    2. Análise textual combinando dados ao vivo com tendência histórica.
-    3. Lista de 3 a 4 "fatores chave".
+    Para cada sinal gerado, forneça o ID correto da partida (matchId), o tipo de mercado, descrição, confiança (0.0 a 1.0), odd sugerida, análise detalhada e fatores chave.
   `;
 
   return safeApiCall(async () => {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview', // Usando Flash para sinais automáticos (maior cota)
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -70,7 +64,7 @@ export async function generateBettingSignals(match: Match): Promise<BettingSigna
           items: {
             type: Type.OBJECT,
             properties: {
-              matchId: { type: Type.STRING },
+              matchId: { type: Type.STRING, description: "O ID da partida ao qual este sinal pertence" },
               type: { type: Type.STRING, enum: ['CORNER', 'GOAL', 'CARDS', 'RESULT'] },
               description: { type: Type.STRING },
               confidence: { type: Type.NUMBER },
@@ -90,11 +84,10 @@ export async function generateBettingSignals(match: Match): Promise<BettingSigna
     const signals = JSON.parse(response.text || "[]") as any[];
     return signals.map(s => ({
       ...s,
-      matchId: match.id,
       timestamp: new Date().toLocaleTimeString('pt-BR')
     }));
   }).catch(err => {
-    console.error("Erro final ao gerar sinais:", err);
+    console.error("Erro final ao gerar sinais em lote:", err);
     return [];
   });
 }
